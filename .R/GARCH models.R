@@ -1,0 +1,624 @@
+
+
+
+# **Convert data into _time series_**
+
+
+#################################  Convert data into time series  ####################################################################### 
+setwd("C:/Users/ddaya/OneDrive/Data Science Portfolio/Quantitative Finance")
+# import dataset
+library(zoo)
+StockData <- read.zoo("GOOG.csv",header = TRUE, sep = ",",format="%Y-%m-%d")
+PriceData<-ts(StockData$Adj.Close, frequency = 5) # Frequency=5 because it is set on only business days
+
+# Note:
+#Frequency = 12 means that data is at monthly level
+# Frequency = 4 means that data is at quarterly level
+# Frequency = 6 means data points for every 10 minutes of an hour
+# Frequency = 5 means that data is at daily level business day
+
+plot(PriceData,type="l") # plots stock movement through time
+
+
+
+
+
+
+
+##**Linear Filters**
+
+
+# We will use simple linear filters, such as moving average, to identify trends in our data.
+
+
+
+
+#################################  Linear Filters ####################################################################### 
+
+plot(PriceData,type="l")
+### Weekly Moving Average
+WeeklyMAPrice <- filter(PriceData,filter=rep(1/5,5))
+lines(WeeklyMAPrice,col="red") # plots the weekly stock movement 
+### Monthly Moving Average
+monthlyMAPrice <- filter(PriceData,filter=rep(1/25,25))  
+lines(monthlyMAPrice,col="blue") # plots the monthly stock movement
+
+
+
+
+# Nicer graph 1 (with _astsa_ package)
+
+# nicer graphs  
+# If you don't want to save your plot, do not use png() and dev.off().
+# png(file='gtemps1.png', width=600, height=320)
+library(astsa)
+tsplot(StockData$Adj.Close, gg=TRUE, ylab='Price', col=4, type='l')  # adjusted closing price
+# dev.off() 
+
+
+
+
+
+# Nicer graph 2 (with _ggplot2_ package)
+
+
+
+
+# png(file='gtemps1.png', width=600, height=320)
+# multiple time series / comparative graph    
+library(ggplot2)   
+gtemp.df    = data.frame(Time=c(time(StockData$Adj.Close)), gtemp=c(WeeklyMAPrice), gtempk=c(monthlyMAPrice), gtempl=c(StockData$Adj.Close))
+Price_plot<-ggplot(data = gtemp.df, aes(x=Time, y=value, color=variable )  )             +
+  ylab('Price')                                 +
+  geom_line(aes(y=gtemp , col='Stock Price'), size=1, alpha=.5)   +
+  geom_line(aes(y=gtempl, col='Weekly MA'),  size=1, alpha=.5)   +
+  geom_line(aes(y=gtempk, col='Monthly MA'),  size=1, alpha=.5)   +
+  theme(legend.position=c(.1,.85))		
+Price_plot
+#  dev.off()
+
+
+
+
+
+
+# **Forecasting**
+
+
+
+# **--------------------------------------------------------------------------------------------------**
+  
+  
+#  __INFORMATION__
+
+
+# We use [this resource](https://www.stern.nyu.edu/rengle/GARCH101.PDF) to understand our model
+
+
+# The standard warning is that in the presence of heteroskedasticity, the regression coefficients for an ordinary least squares regression are still unbiased, but the standard errors and confidence intervals estimated by conventional procedures will be too narrow, giving a false sense of precision. Instead of considering this as a problem to be corrected, ARCH and GARCH models treat heteroskedasticity as a variance to be modeled.
+
+
+# The ARCH model is useful for time series analysis and forecast volatility specially useful for examining portfolio risk. The accuracy of a prediction is a  question that arises in financial applications where the dependent variable is the return on an asset or portfolio and the variance of the return represents the risk level of those returns. 
+
+
+# To be more specific, it is used when the error variance is related to squared error terms several periods in the past. This is usually the case with  financial time series, such as stock prices, inflation rates, and foreign exchange rates. This is because financial time series often exhibit the phenomenon of volatility clustering, that is, periods in which their prices show wide swings for an extended time period followed by periods in which there is relative calm. 
+
+
+# ARCH is recommended for correcting heteroschedasticity in time-series. The ARCH and GARCH models, which stand for autoregressive conditional heteroskedasticity and generalized autoregressive conditional heteroskedasticity, are designed to deal with just this set of issues. 
+
+
+# _How it works_:
+  
+#  It assumes that the variance of tomorrow's return is an equally weighted average of the squared residuals from the some specific few days (maybe the last 5 days). Our data has a frequency of five days (business days in the week), therefore, ARCH determines the best weights to be used as parameters. 
+
+
+# **----------------------------------------------------------------------------------------------------------------**  
+
+
+# (For this part, we used [this resource](https://rstudio-pubs-static.s3.amazonaws.com/346563_b404c507f20549f196f43c57d363595f.html))
+
+
+# _To perform the test for ARCH effects, we must_:
+  
+# 1. Estimate a regression. In this example, is ARIMA(0,1,0) with drift
+# 2. Retrieve the estimated residuals $e_t$
+# 3. Test for ARCH:
+
+
+# A Langrange multiplier (LM) test is often used to test for the presence of ARCH effects. To perform the LM test, we first estimate the mean equation, which can be a regression of the varriable on a constant or may include other variables as well. Then, we save the estimated residuals $e^t$ and obtain their squares $e^{2}_t$. To test for the first-order ARCH, we regres $e^{2}_t$ on the squared residuals lagged $e^2_{t_-1}$ as follows:
+
+# $e^2_t = \gamma_0 + \gamma_1e^2_{t_{-1}} + vt$  
+          
+# (where vt is a random error term)
+          
+          
+# The null and alternative hypotheses are:
+  
+# H0: $ \gamma_1 = 0 $ 
+          
+          
+# H1: $\gamma_1 \neq gamma_0$
+  
+  
+# If there are no ARCH effects, then $\gamma_1=0$ and the fit of our model will be poor, and the equation's $R^2$ will be low. If there exists ARCH effects, we expect the magnitude of $e^2_t$ to depend on its lagged values, and the $R^2$ will be relatively high. The LM test test statistic is $(T-q)R^2$ where T is the sample size, q is the number of $e^2_{t-j}$ terms of the right-hand side of our equation, and $R^2$ is distributed as $X^2_{(q)}$, where q is the order of lag, and T-q is the number of complete obervations. In thise case, q=1. If $(T-q) R^2 \geq X^2_{(\alpha-1,q)}$, then we reject the null hypothesis that $\gamma_1=0$ and conclude that ARCH effects are present.
+
+# **--------------------------------------------------------------------------------------------------------------**
+#   **--------------------------------------------------------------------------------------------------------------** 
+  
+  
+  # Diagnostics
+  
+  
+  # ARIMA 
+  
+  
+#  _Step 1: Estimate ARIMA_ 
+
+
+
+library(forecast)
+
+fit.Ar<-Arima(PriceData, order=c(2,1,0), lambda=0, include.drift=TRUE)
+head(fit.Ar)
+
+
+
+# _Step 2: Retrieve the residuals from the former model and square them._
+
+
+err.sq <- ts(resid(fit.Ar)^2)
+
+# regress squared residuals on one-lagged squared residuals
+library(dynlm)
+fit.arch <- dynlm(err.sq ~ L(err.sq), data = err.sq)
+summary(fit.arch)
+     
+
+
+# _Step 3: Test for ARCH effect_
+
+
+library(FinTS)
+byd.archTest <- ArchTest(StockData$Adj.Close, lags = 1, demean = TRUE)
+byd.archTest
+
+
+
+# With a p-value<0.05 we reject the Null Hypothesis and conclude that we have an ARCH(1) effect.
+
+
+# Autoregressive Conditional Heteroskedasticity (ARCH)
+
+# Apply ARCH model
+library(rugarch)
+
+arch_m=ugarchspec(variance.model=list(garchOrder=c(1,0)), mean.model=list(armaOrder=c(2,0)))
+#estimate model 
+arch.fit=ugarchfit(spec=arch_m, data=StockData$Adj.Close)
+arch.fit
+           
+
+
+# __Notice__:
+  
+#  Based on the output, the estimated mean of the series is $\mu$=525.876380, and the estimated variance is $\omega+\alpha_1$=178.409283+0.631828=179.0411
+
+# Let's forecast for the next 10 business days.
+
+        FutureForecast=ugarchforecast(arch.fit, n.ahead = 10)
+           FutureForecast
+           
+            
+  
+     # 1st: merge forecasted and actual data
+           Future_F<-as.data.frame(FutureForecast@forecast)
+            Future_F<-Future_F$X2020.12.29.1
+            
+           library(timeDate)
+           holidays = holidayNYSE()
+           daysSeq = as.timeDate(seq(from = as.Date("2020-12-29"), to = as.Date("2021-01-12"), by = "day"))
+           Dt<-daysSeq[isBizday(daysSeq, holidays = holidays, wday = 1:5)]
+           
+           Future<-data.frame(Dt, Future_F)
+            names(Future)[1] <- "Index"
+            names(Future)[2] <- "StockData$Adj.Close"
+            Future<-read.zoo(Future, tz="as.POSIXct")
+            
+            
+            # manipulate the data a little to have a better graph
+            GOOG_A<- fortify.zoo(StockData$Adj.Close)
+                 GOOG_A$`StockData$Adj.Close`<-as.numeric(as.character(GOOG_A$`StockData$Adj.Close`))
+                 GOOG_A<-read.zoo(GOOG_A, tz="as.POSIXct")
+            
+            # plot Google vs. Google Forecast
+                          
+                                    plot.zoo(GOOG_A, gg=TRUE, ylab='Price', col=4, type='l')  
+                                      lines(Future, col="red")
+                                        title("GOOGLE stock")
+                                          legend("topleft", inset=c(0,0), y.intersp = 1, 
+                                                 legend = c("Google Stock", "Forecast"),  lty = 1, bty = "n", col = c(1,2), cex = .5)
+                 
+
+
+
+   
+
+# Forecast
+
+
+ plot.zoo(Future, col="red")
+                 
+
+
+  
+
+
+
+# GARCH (generalized autoregressive conditional heteroscedasticity)
+
+
+# _How it works_:
+# The most widely used GARCH specification, asserts that the best predictor of the variance in the next period is a weighted average of the long run average variance, the variance predicted for this period and the new information this period which is the most recent squared residual. Such an updating rule is a simple description of adaptive or learning behavior and can be thought of as Bayesian updating. This model is also a weighted average of past squared residuals but it has declining weights which never go completely to zero.
+
+        
+# __Notice__: The only difference between ARCH and GARCH is that in the second one, the conditional variance is lagged. Let's see if it has a better fit. We will fit the best GARCH model.
+
+
+library(rugarch)
+gspec.ru <- ugarchspec(mean.model=list( armaOrder=c(2,0)), distribution="std")
+gfit.ru <- ugarchfit(gspec.ru, StockData$Adj.Close)
+coef(gfit.ru)
+            
+
+
+# __Notice__:
+  
+#  Based on the output, the estimated mean of the series is $\mu$=526.5156, and the estimated variance is $\omega+\alpha_1+\beta_1$=1.900346e+00+7.946258e-02+9.195374e-01=2.899346
+
+
+FutureForecast=ugarchforecast(gfit.ru, n.ahead = 10)           
+FutureForecast
+                 
+# Plot         
+                
+# 1st: merge forecasted and actual data
+Future_F<-as.data.frame(FutureForecast@forecast)
+Future_F<-Future_F$X2020.12.29.1
+
+library(timeDate)
+holidays = holidayNYSE()
+daysSeq = as.timeDate(seq(from = as.Date("2020-12-29"), to = as.Date("2021-01-12"), by = "day"))
+Dt<-daysSeq[isBizday(daysSeq, holidays = holidays, wday = 1:5)]
+
+Future<-data.frame(Dt, Future_F)
+names(Future)[1] <- "Index"
+names(Future)[2] <- "StockData$Adj.Close"
+Future<-read.zoo(Future, tz="as.POSIXct")
+
+
+
+# manipulate the data a little to have a better graph
+GOOG_A<- fortify.zoo(StockData$Adj.Close)
+GOOG_A$`StockData$Adj.Close`<-as.numeric(as.character(GOOG_A$`StockData$Adj.Close`))
+GOOG_A<-read.zoo(GOOG_A, tz="as.POSIXct")
+
+# plot Google vs. Google Forecast
+
+plot.zoo(GOOG_A, gg=TRUE, ylab='Price', col=4, type='l')  
+lines(Future, col="red")
+title("GOOGLE stock")
+legend("topleft", inset=c(0,0), y.intersp = 1, 
+       legend = c("Google Stock", "Forecast"),  lty = 1, bty = "n", col = c(1,2), cex = .5)
+
+
+                  
+
+Forecast
+
+
+plot.zoo(Future, col="red")
+
+
+
+
+
+#EGARCH (exponential generalized autoregressive conditional heteroscedasticity)
+
+# It best describes data if we observe asymmetric reactions of volatility to positive and negative shocks.  
+# This model differs from the traditional GARCH in structure due to the log of variance.
+# It is used for asymmetric effects.
+
+
+
+
+egarchsnp.spec = ugarchspec(variance.model=list(model="eGARCH",garchOrder=c(1,1)),
+                            mean.model=list(armaOrder=c(2,0)), distribution.model="std")
+
+
+egarchsnp.fit = ugarchfit(egarchsnp.spec, solver = 'hybrid', data=StockData$Adj.Close)
+egarchsnp.fit
+
+
+
+
+coef(egarchsnp.fit)
+
+
+
+
+# __Notice__:
+  
+  Based on the output, the estimated mean of the series is $\mu$=525.1499, and the estimated variance is $\omega+\alpha_1+\beta_1$=5.765048e-02 + 9.893240e-01 + 1.921884e-01=1.239163
+
+
+FutureForecast=ugarchforecast(egarchsnp.fit, n.ahead = 10)
+FutureForecast
+
+
+
+# 1st: merge forecasted and actual data
+Future_F<-as.data.frame(FutureForecast@forecast)
+Future_F<-Future_F$X2020.12.29.1
+
+library(timeDate)
+holidays = holidayNYSE()
+daysSeq = as.timeDate(seq(from = as.Date("2020-12-29"), to = as.Date("2021-01-12"), by = "day"))
+Dt<-daysSeq[isBizday(daysSeq, holidays = holidays, wday = 1:5)]
+
+Future<-data.frame(Dt, Future_F)
+names(Future)[1] <- "Index"
+names(Future)[2] <- "StockData$Adj.Close"
+Future<-read.zoo(Future, tz="as.POSIXct")
+
+
+
+# manipulate the data a little to have a better graph
+GOOG_A<- fortify.zoo(StockData$Adj.Close)
+GOOG_A$`StockData$Adj.Close`<-as.numeric(as.character(GOOG_A$`StockData$Adj.Close`))
+GOOG_A<-read.zoo(GOOG_A, tz="as.POSIXct")
+
+# plot Google vs. Google Forecast
+
+plot.zoo(GOOG_A, gg=TRUE, ylab='Price', col=4, type='l')  
+lines(Future, col="red")
+title("GOOGLE stock")
+legend("topleft", inset=c(0,0), y.intersp = 1, 
+       legend = c("Google Stock", "Forecast"),  lty = 1, bty = "n", col = c(1,2), cex = .5)
+
+
+
+
+Forecast
+
+
+plot.zoo(Future, col="red")
+
+
+
+
+# VGARCH (vector generalized autoregressive conditional heteroscedasticity -GARCH- or multivariate GARCH)
+
+
+# We assume that financial volatilities move together over time across assets and markets. Acknowledging this aspect through a multivariate modeling framework should lead to a better model separate univariate model. 
+
+# That is why I will model the GOOGLE stock along with the S&P 500 the data was downloaded [here](https://finance.yahoo.com/quote/ES%3DF/history?p=ES%3DF).
+
+
+# First off, I will generate the dataset with our two variables of interest.
+
+library(zoo)
+SP <- read.zoo("ES=F.csv",header = TRUE, sep = ",",format="%Y-%m-%d") # import S&P 500 index
+PriceAll<-merge(StockData$Adj.Close, SP$Adj.Close, all = FALSE) # merge with GOOGLE stock
+names(PriceAll)[1] <- "GOOGLE" # change column name
+names(PriceAll)[2] <- "SP500" # change other column name
+PriceAll<-PriceAll[-which(PriceAll$SP500 == "null"), ] # get rid of all rows that have "null" 
+head(PriceAll)
+
+
+
+# Now, we can perform our forecast.
+   
+# Generate VGARCH 
+library(rmgarch)
+library(PerformanceAnalytics)
+
+
+garch_spec = ugarchspec(mean.model = list(armaOrder = c(2,0)),variance.model = list(garchOrder = c(1,1), model = "sGARCH"), distribution.model = "norm")
+dcc.garch_spec = dccspec(uspec = multispec( replicate(2, garch_spec) ), dccOrder = c(1,1), distribution = "mvnorm")
+dcc_fit= dccfit(dcc.garch_spec,data = PriceAll)
+#  forecast
+fcst=dccforecast(dcc_fit,n.ahead=10)
+For<-as.data.frame(fcst@mforecast)
+           
+
+
+#####GOOGLE 
+
+
+# **Forecasted values for the next 10 business days**
+          
+For$mu.1
+     
+
+
+# **Plot GOOGLE forecast**
+# 1st: merge forecasted and actual data
+
+A<-as.data.frame(cbind(For$mu.1,For$mu.2))
+colnames(A) <- c("GOOGLE","SP500") # change column name
+
+library(timeDate)
+holidays = holidayNYSE()
+daysSeq = as.timeDate(seq(from = as.Date("2020-12-29"), to = as.Date("2021-01-12"), by = "day"))
+Dt<-daysSeq[isBizday(daysSeq, holidays = holidays, wday = 1:5)]
+
+A<-cbind(Dt, A)
+names(A)[1] <- "Index"
+# plot Google vs. Google Forecast
+GOOG<- fortify.zoo(PriceAll$GOOGLE)
+GOOG$`PriceAll$GOOGLE`<-as.numeric(as.character(GOOG$`PriceAll$GOOGLE`))
+GOOG<-read.zoo(GOOG, tz="as.POSIXct")
+A.A<- read.zoo(A,  tz = " as.POSIXct") # convert into zoo object
+GOOG_FORECAST<-A.A$GOOGLE
+plot.zoo(GOOG, gg=TRUE, ylab='Price', col=4, type='l')  
+lines(GOOG_FORECAST, col="red")
+title("GOOGLE stock")
+legend("topleft", inset=c(0,0), y.intersp = 1, 
+       legend = c("Google Stock", "Forecast"),  lty = 1, bty = "n", col = c(1,2), cex = .5)
+                                       
+
+
+Forecast
+
+
+plot.zoo(GOOG_FORECAST, col="red")
+
+
+
+
+
+#####S&P500 Forecast 
+
+
+# **Forecasted values for the next 10 business days**   
+          
+For$mu.2
+ 
+
+
+# **Plot S&P500 forecast**
+ 
+# plot SP500 vs. SP500 Forecast
+# manipulate data to best generate graph
+SP500<- fortify.zoo(PriceAll$SP500)
+SP500$`PriceAll$SP500`<-as.numeric(as.character(SP500$`PriceAll$SP500`))
+SP500<-read.zoo(SP500, tz="as.POSIXct")
+SP500_FORECAST<-A.A$SP500
+# generate graph
+plot.zoo(SP500, gg=TRUE, ylab='Price', col=4, type='l')  
+lines(SP500_FORECAST, col="red") 
+title("S&P500 Index")
+legend("topleft", inset=c(0,0), y.intersp = 1, 
+       legend = c("S&P500 Index", "Forecast"),  lty = 1, bty = "n", col = c(1,2), cex = .5)
+                                        
+
+
+# Forecast
+
+
+plot.zoo(SP500_FORECAST, col="red")
+
+
+
+
+# DCC (Dynamic conditional correlation)
+
+# __Information__:
+  
+#  These models, which parameterize the conditional correlations directly, are naturally estimated in two steps -- the first is a series of univariate GARCH estimates and the second the correlation estimate. These methods have clear computational advantages over multivariate GARCH models in that the number of parameters to be estimated in the correlation process is independent of the number of series to be correlated. Thus potentially very large correlation matrices can be estimated.
+
+
+
+# specify DCC  
+garchspec = ugarchspec(mean.model = list(armaOrder = c(2,0)), 
+                       variance.model = list(garchOrder = c(1,1), 
+                                             model = "sGARCH"), distribution.model = "norm")
+
+dcc.garchsnpdji.spec = dccspec(uspec = multispec( replicate(2, garchspec) ), dccOrder = c(1,1), distribution = "mvnorm")
+
+# fit the model                                    
+dcc_fit_2 = dccfit(dcc.garchsnpdji.spec , data = PriceAll, fit.control=list(scale=TRUE))
+dcc_fit_2
+                
+
+
+#####GOOGLE 
+
+
+# **Forecasted values for the next 10 business days**                 
+  
+  
+#  forecast
+fcst=dccforecast(dcc_fit_2,n.ahead=10)
+For<-as.data.frame(fcst@mforecast)
+For$mu.1
+                
+
+
+# **Plot GOOGLE forecast**
+  
+# plot forecast
+# 1st: merge forecasted and actual data
+
+A<-as.data.frame(cbind(For$mu.1,For$mu.2))
+colnames(A) <- c("GOOGLE","SP500") # change column name
+
+library(timeDate)
+holidays = holidayNYSE()
+daysSeq = as.timeDate(seq(from = as.Date("2020-12-29"), to = as.Date("2021-01-12"), by = "day"))
+Dt<-daysSeq[isBizday(daysSeq, holidays = holidays, wday = 1:5)]
+
+A<-cbind(Dt, A)
+names(A)[1] <- "Index"
+
+# plot Google vs. Google Forecast
+GOOG<- fortify.zoo(PriceAll$GOOGLE)
+GOOG$`PriceAll$GOOGLE`<-as.numeric(as.character(GOOG$`PriceAll$GOOGLE`))
+GOOG<-read.zoo(GOOG, tz="as.POSIXct")
+A.A<- read.zoo(A,  tz = " as.POSIXct") # convert into zoo object
+GOOG_FORECAST<-A.A$GOOGLE
+plot.zoo(GOOG, gg=TRUE, ylab='Price', col=4, type='l')  
+lines(GOOG_FORECAST, col="red")
+title("GOOGLE stock")
+legend("topleft", inset=c(0,0), y.intersp = 1, 
+       legend = c("Google Stock", "Forecast"),  lty = 1, bty = "n", col = c(1,2), cex = .5)
+                 
+
+
+Forecast
+
+
+plot.zoo(GOOG_FORECAST, col="red")
+
+
+
+
+
+#####S&P500 
+
+
+# **Forecasted values for the next 10 business days**   
+ 
+For$mu.2
+
+
+
+# **Plot S&P500 forecast**                                  
+                
+# plot SP500 vs. SP500 Forecast
+# manipulate data to best generate graph
+SP500<- fortify.zoo(PriceAll$SP500)
+SP500$`PriceAll$SP500`<-as.numeric(as.character(SP500$`PriceAll$SP500`))
+SP500<-read.zoo(SP500, tz="as.POSIXct")
+SP500_FORECAST<-A.A$SP500
+# generate graph
+plot.zoo(SP500, gg=TRUE, ylab='Price', col=4, type='l')  
+lines(SP500_FORECAST, col="red") 
+title("S&P500 Index")
+legend("topleft", inset=c(0,0), y.intersp = 1, 
+       legend = c("S&P500 Index", "Forecast"),  lty = 1, bty = "n", col = c(1,2), cex = .5)
+
+
+                      
+
+
+# Forecast
+
+
+plot.zoo(SP500_FORECAST, col="red")
+
+
+
+
+
+save.image("GARCH_models.RData")

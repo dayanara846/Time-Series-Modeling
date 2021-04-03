@@ -1,0 +1,1253 @@
+###################################### set working directory ##########################################
+setwd("C:/Users/ddaya/OneDrive/Data Science Portfolio/Quantitative Finance")
+
+#################################### Step 1: Import models ###########################################
+
+# Run our ARMA and GARCH models
+# source("ARMA Models.R")
+# source("GARCH models.R")
+
+
+
+
+# **Step 1: Import models**
+
+###################################### set working directory ##########################################
+setwd("C:/Users/ddaya/OneDrive/Data Science Portfolio/Quantitative Finance")
+
+#################################### Step 1: Import models ###########################################
+
+# Run our ARMA and GARCH models
+load("ARIMA_models.RData")
+load("GARCH_models.RData")
+
+
+
+# **Step 2: K-fold Cross Validation**
+# This is a regular k-fold cross-validation for autoregressive models. Although cross-validation is sometimes not valid for time series models, it does work for autoregressions. Theory on the appropriateness of K-Fold cross validation for time series can be seen [here](https://robjhyndman.com/publications/cv-time-series/). 
+
+
+
+
+################################### Step 2: K-fold Cross Validation ##################################
+
+
+library(forecast)
+modelcv_Arima <- CVar(PriceArima$fitted, k=5)                    # ARIMA
+CV_Arima<-as.data.frame(modelcv_Arima$CVsummary)
+colnames(CV_Arima)<- c("Arima_Mean", "Arima_SD")
+modelcv_Arch <- CVar(arch.fit@fit[["fitted.values"]], k=5)       # ARCH
+CV_Arch<-as.data.frame(modelcv_Arch$CVsummary)
+colnames(CV_Arch)<- c("Arch_Mean", "Arch_SD")
+modelcv_Garch<- CVar(gfit.ru@fit[["fitted.values"]], k=5)        # GARCH 
+CV_Garch<-as.data.frame(modelcv_Garch$CVsummary)
+colnames(CV_Garch)<- c("Garch_Mean", "Garch_SD")
+modelcv_EGarch<- CVar(egarchsnp.fit@fit[["fitted.values"]], k=5) # EGARCH
+CV_EGarch<-as.data.frame(modelcv_EGarch$CVsummary)
+colnames(CV_EGarch)<- c("Garch_Mean", "Garch_SD")
+
+# for the multivariate GARCH, I will only choose the GOOGLE stats
+H<-as.data.frame(dcc_fit@model[["mu"]])
+H1<-H[,1]
+modelcv_VGarch<- CVar(H1, k=5)                                   # VGARCH
+CV_VGarch<-as.data.frame(modelcv_VGarch$CVsummary)
+colnames(CV_VGarch)<- c("VGarch_Mean", "VGarch_SD")
+
+# for the DCC, I will only choose the GOOGLE stats
+H<-as.data.frame(dcc_fit_2@model[["mu"]])
+H2<-H[,1]
+modelcv_DCC<- CVar(H1, k=5)
+CV_DCC<-as.data.frame(modelcv_DCC$CVsummary)                   # DCC
+colnames(CV_DCC)<- c("DCC_Mean", "DCC_SD")
+
+# merge all k - folds
+# merge multiple datasets
+K_Folds <- Reduce(function(x, y) merge(x, y, all=TRUE), 
+                  list(CV_Arima, CV_Arch, CV_Garch,
+                       CV_EGarch, CV_VGarch, CV_DCC))
+# data frame of all K-Folds
+K_Folds<-cbind(CV_Arima, CV_Arch, CV_Garch,
+               CV_EGarch, CV_VGarch, CV_DCC)
+
+names(K_Folds)[7]<-"Egarch_Mean"
+names(K_Folds)[8]<-"Egarch_SD"
+
+
+
+# **Cross Validation Results**
+
+K_Folds[,1:5]
+
+
+K_Folds[,6:11]
+
+
+
+K_Folds[,11:12]
+
+
+
+# **Selecting the best model**
+ 
+# Retrive the best models, by each estimators account
+A1<-rownames(K_Folds)[1] # retrieves the statistic
+DF<-as.table(which(K_Folds==min(K_Folds[1,]), arr.ind=TRUE))
+B1<-colnames(K_Folds)[DF[,2]] 
+
+
+A2<-rownames(K_Folds)[2] # retrieves the statistic
+DF<-as.table(which(K_Folds==min(K_Folds[2,]), arr.ind=TRUE))
+B2<-as.matrix(colnames(K_Folds)[DF[,2]])
+B2<-B2[1,]
+
+
+A3<-rownames(K_Folds)[3] # retrieves the statistic
+DF<-as.table(which(K_Folds==min(K_Folds[3,]), arr.ind=TRUE))
+B3<-as.matrix(colnames(K_Folds)[DF[,2]])
+B3<-B3[1,]
+
+
+
+A4<-rownames(K_Folds)[4] # retrieves the statistic
+DF<-as.table(which(K_Folds==min(K_Folds[4,]), arr.ind=TRUE))
+B4<-colnames(K_Folds)[DF[,2]] 
+
+
+A5<-rownames(K_Folds)[5] # retrieves the statistic
+DF<-as.table(which(K_Folds==min(K_Folds[5,]), arr.ind=TRUE))
+B5<-colnames(K_Folds)[DF[,2]] 
+
+
+A6<-rownames(K_Folds)[6] # retrieves the statistic
+DF<-as.table(which(K_Folds==min(K_Folds[6,1:10]), arr.ind=TRUE))
+B6<-colnames(K_Folds)[DF[,2]] 
+
+
+A7<-rownames(K_Folds)[7] # retrieves the statistic
+DF<-as.table(which(K_Folds==min(K_Folds[7,1:10]), arr.ind=TRUE))
+B7<-colnames(K_Folds)[DF[,2]] 
+
+
+# Generate data frame with results
+Estimator<-c(A1,A2,A3,A4,A5,A6,A7)
+Model<- c(B1,B2,B3,B4,B5,B6,B7)
+CV_Results<-cbind(Estimator,Model)
+# Verify the model that repeats itself the most over the best estimators          
+mytab<-as.table(CV_Results)
+Freq_Table<-ftable(mytab[,2])
+Freq_Table<-as.data.frame(Freq_Table)
+Freq_Table
+
+
+
+
+# Return the name of the model with the highest frequency      
+DF<-as.table(which(Freq_Table==max(Freq_Table[,2]), arr.ind=TRUE))
+Freq_Table[DF[1,1],1]
+                    
+
+
+# __CONCLUSION:__ ARCH is the best model to forecast variance, ARIMA is the best for mean point forecast, which is what we are interested in.                  
+
+
+# **Step 3: Graph and Average Error**                  
+                 
+################################### Step 3: Graph and Average Error ##################################
+
+
+### ARIMA                
+# convert into time series
+library(zoo)
+GOOG<- fortify.zoo(StockData$Adj.Close)
+GOOG$`StockData$Adj.Close`<-as.numeric(as.character(GOOG$`StockData$Adj.Close`))
+GOOG$Fit<-PriceArima$fitted
+GOOG$Error <- GOOG$`StockData$Adj.Close`-GOOG$Fit
+GOOG<-read.zoo(GOOG, tz="as.POSIXct")
+mean(GOOG$Error) # mean error =  0.02955047
+
+
+plot.zoo(GOOG$`StockData$Adj.Close`, gg=TRUE, ylab='Price', col=4, type='l')  
+lines(GOOG$Fit, col="red") 
+title("ARIMA Model | Mean Error = 0.0296" )
+legend("topleft", inset=c(0,0), y.intersp = 1, 
+       legend = c("Google Stock", "Fitted"),  lty = 1, bty = "n", col = c(1,2), cex = .5)
+
+
+
+
+### ARCH               
+# convert into time series
+
+GOOG<- fortify.zoo(StockData$Adj.Close)
+GOOG$`StockData$Adj.Close`<-as.numeric(as.character(GOOG$`StockData$Adj.Close`))
+GOOG$Fit<-arch.fit@fit[["fitted.values"]]
+GOOG$Error <- GOOG$`StockData$Adj.Close`-GOOG$Fit
+GOOG<-read.zoo(GOOG, tz="as.POSIXct")
+mean(GOOG$Error) # mean error = 0.4906739
+
+
+plot.zoo(GOOG$`StockData$Adj.Close`, gg=TRUE, ylab='Price', col=4, type='l')  
+lines(GOOG$Fit, col="red") 
+title("ARCH Model | Mean Error = 0.4906739" )
+legend("topleft", inset=c(0,0), y.intersp = 1, 
+       legend = c("Google Stock", "Fitted"),  lty = 1, bty = "n", col = c(1,2), cex = .5)
+
+
+
+
+
+### GARCH                      
+# convert into time series
+
+GOOG<- fortify.zoo(StockData$Adj.Close)
+GOOG$`StockData$Adj.Close`<-as.numeric(as.character(GOOG$`StockData$Adj.Close`))
+GOOG$Fit<-gfit.ru@fit[["fitted.values"]]
+GOOG$Error <- GOOG$`StockData$Adj.Close`-GOOG$Fit
+GOOG<-read.zoo(GOOG, tz="as.POSIXct")
+mean(GOOG$Error) # mean error = -0.4768176
+
+
+plot.zoo(GOOG$`StockData$Adj.Close`, gg=TRUE, ylab='Price', col=4, type='l')  
+lines(GOOG$Fit, col="red") 
+title("GARCH Model | Mean Error = -0.4768" )
+legend("topleft", inset=c(0,0), y.intersp = 1, 
+       legend = c("Google Stock", "Fitted"),  lty = 1, bty = "n", col = c(1,2), cex = .5)
+
+
+
+
+### EGARCH                     
+# convert into time series
+
+GOOG<- fortify.zoo(StockData$Adj.Close)
+GOOG$`StockData$Adj.Close`<-as.numeric(as.character(GOOG$`StockData$Adj.Close`))
+GOOG$Fit<-egarchsnp.fit@fit[["fitted.values"]]
+GOOG$Error <- GOOG$`StockData$Adj.Close`-GOOG$Fit
+GOOG<-read.zoo(GOOG, tz="as.POSIXct")
+mean(GOOG$Error) # mean error = -0.4848975
+
+
+plot.zoo(GOOG$`StockData$Adj.Close`, gg=TRUE, ylab='Price', col=4, type='l')  
+lines(GOOG$Fit, col="red") 
+title("EGARCH Model | Mean Error = -0.4848975" )
+legend("topleft", inset=c(0,0), y.intersp = 1, 
+       legend = c("Google Stock", "Fitted"),  lty = 1, bty = "n", col = c(1,2), cex = .5)
+
+
+
+
+### VGARCH
+
+# convert into time series
+
+GOOG<- fortify.zoo(PriceAll)
+GOOG$GOOGLE<-as.numeric(as.character(GOOG$GOOGLE))
+GOOG$SP500<-as.numeric(as.character(GOOG$SP500))
+GOOG$Fit<-H1
+GOOG$Error <- GOOG$GOOGLE-GOOG$Fit
+mean(GOOG$Error) # mean error = 0.354582
+GOOG<-read.zoo(GOOG, tz="as.POSIXct")
+
+plot.zoo(GOOG$GOOGLE, gg=TRUE, ylab='Price', col=4, type='l')  
+lines(GOOG$Fit, col="red") 
+title("VGARCH Model | Mean Error = 0.3546" )
+legend("topleft", inset=c(0,0), y.intersp = 1, 
+       legend = c("Google Stock", "Fitted"),  lty = 1, bty = "n", col = c(1,2), cex = .5)
+
+
+
+
+
+### DCC
+
+# convert into time series
+
+GOOG<- fortify.zoo(PriceAll)
+GOOG$GOOGLE<-as.numeric(as.character(GOOG$GOOGLE))
+GOOG$SP500<-as.numeric(as.character(GOOG$SP500))
+GOOG$Fit<-H2
+GOOG$Error <- GOOG$GOOGLE-GOOG$Fit
+mean(GOOG$Error) # mean error = 0.3543684
+GOOG<-read.zoo(GOOG, tz="as.POSIXct")
+
+plot.zoo(GOOG$GOOGLE, gg=TRUE, ylab='Price', col=4, type='l')  
+lines(GOOG$Fit, col="red") 
+title("DCC Model | Mean Error = 0.3544" )
+legend("topleft", inset=c(0,0), y.intersp = 1, 
+       legend = c("Google Stock", "Fitted"),  lty = 1, bty = "n", col = c(1,2), cex = .5)
+                     
+
+
+# __CONCLUSION__: ARIMA has the best model fit.
+
+
+#**Step 4: in-sample Backtest (1 month forward)**
+                 
+################################### Step 4: in-sample Backtest (1 month forward) ##################################
+
+
+# import data, updated from January
+library(zoo)
+Backtest_GOOG <- read.zoo("Backtest_GOOG.csv",header = TRUE, sep = ",",format="%Y-%m-%d")
+
+
+
+
+#################   ARIMA  ##############################       
+# forecast to January     
+library(forecast)                
+FutureForecast<-forecast(PriceArima,h=20) # 1 month forecast
+FutureForecast_F<-as.data.frame(FutureForecast)
+FutureForecast_F$`Point Forecast`
+# convert into time series
+GOOG<- fortify.zoo(Backtest_GOOG$Adj.Close)
+GOOG$`Backtest_GOOG$Adj.Close`<-as.numeric(as.character(GOOG$`Backtest_GOOG$Adj.Close`))
+GOOG$Forecast<-FutureForecast_F$`Point Forecast`
+GOOG$Error <- GOOG$`Backtest_GOOG$Adj.Close`-GOOG$Forecast
+mean(GOOG$Error) # mean error =  25.93711
+GOOG<-read.zoo(GOOG, tz="as.POSIXct")
+
+
+# Graph actual vs. forecast 
+plot.zoo(GOOG$`Backtest_GOOG$Adj.Close`, gg=TRUE, ylab='Price', col=4, type='l')  
+lines(GOOG$Forecast, col="red") 
+title("ARIMA Model | Mean Error = 25.93711" )
+legend("topleft", inset=c(0,0), y.intersp = 1, 
+       legend = c("Google Stock", "Forecast"),  lty = 1, bty = "n", col = c(1,2), cex = .5)
+
+
+
+
+#################   ARCH  ##############################       
+# forecast to January  
+library(rmgarch)
+FutureForecast=ugarchforecast(arch.fit, n.ahead = 20)
+Future_For<-as.data.frame(FutureForecast@forecast)
+FutureForecast_F<-Future_For$X2020.12.29.1
+
+# convert into time series
+GOOG<- fortify.zoo(Backtest_GOOG$Adj.Close)
+GOOG$`Backtest_GOOG$Adj.Close`<-as.numeric(as.character(GOOG$`Backtest_GOOG$Adj.Close`))
+GOOG$Forecast<-FutureForecast_F
+GOOG$Error <- GOOG$`Backtest_GOOG$Adj.Close`-GOOG$Forecast
+mean(GOOG$Error) # mean error =  33.20978
+GOOG<-read.zoo(GOOG, tz="as.POSIXct")
+
+
+# Graph actual vs. forecast 
+plot.zoo(GOOG$`Backtest_GOOG$Adj.Close`, gg=TRUE, ylab='Price', col=4, type='l')  
+lines(GOOG$Forecast, col="red") 
+title("ARCH Model | Mean Error = 33.2098" )
+legend("topleft", inset=c(0,0), y.intersp = 1, 
+       legend = c("Google Stock", "Forecast"),  lty = 1, bty = "n", col = c(1,2), cex = .5)
+
+
+
+
+#################   GARCH  ##############################       
+# forecast to January     
+FutureForecast=ugarchforecast(gfit.ru, n.ahead = 20)
+Future_For<-as.data.frame(FutureForecast@forecast)
+FutureForecast_F<-Future_For$X2020.12.29.1
+
+
+# convert into time series
+GOOG<- fortify.zoo(Backtest_GOOG$Adj.Close)
+GOOG$`Backtest_GOOG$Adj.Close`<-as.numeric(as.character(GOOG$`Backtest_GOOG$Adj.Close`))
+GOOG$Forecast<-FutureForecast_F
+GOOG$Error <- GOOG$`Backtest_GOOG$Adj.Close`-GOOG$Forecast
+mean(GOOG$Error) # mean error =  6.506502
+GOOG<-read.zoo(GOOG, tz="as.POSIXct")
+
+
+# Graph actual vs. forecast 
+plot.zoo(GOOG$`Backtest_GOOG$Adj.Close`, gg=TRUE, ylab='Price', col=4, type='l')  
+lines(GOOG$Forecast, col="red") 
+title("GARCH Model | Mean Error = 6.506502" )
+legend("topleft", inset=c(0,0), y.intersp = 1, 
+       legend = c("Google Stock", "Forecast"),  lty = 1, bty = "n", col = c(1,2), cex = .5)   
+
+
+
+
+#################   EGARCH  ##############################       
+# forecast to January     
+FutureForecast=ugarchforecast(egarchsnp.fit, n.ahead = 20)
+Future_For<-as.data.frame(FutureForecast@forecast)
+FutureForecast_F<-Future_For$X2020.12.29.1
+
+
+# convert into time series
+GOOG<- fortify.zoo(Backtest_GOOG$Adj.Close)
+GOOG$`Backtest_GOOG$Adj.Close`<-as.numeric(as.character(GOOG$`Backtest_GOOG$Adj.Close`))
+GOOG$Forecast<-FutureForecast_F
+GOOG$Error <- GOOG$`Backtest_GOOG$Adj.Close`-GOOG$Forecast
+mean(GOOG$Error) # mean error =   6.319701
+GOOG<-read.zoo(GOOG, tz="as.POSIXct")
+
+
+# Graph actual vs. forecast 
+plot.zoo(GOOG$`Backtest_GOOG$Adj.Close`, gg=TRUE, ylab='Price', col=4, type='l')  
+lines(GOOG$Forecast, col="red") 
+title("EGARCH Model | Mean Error = 6.3197" )
+legend("topleft", inset=c(0,0), y.intersp = 1, 
+       legend = c("Google Stock", "Forecast"),  lty = 1, bty = "n", col = c(1,2), cex = .5)  
+
+
+
+
+#################   VGARCH  ############################## 
+# merge the GOOGLE stock and S&P500 index into one dataset
+
+
+
+SP <- read.zoo("Backtest_SP500.csv",header = TRUE, sep = ",",format="%Y-%m-%d") # import S&P 500 index
+Backtest_Data<-merge(fortify.zoo(Backtest_GOOG), fortify.zoo(SP$Adj.Close), all = FALSE) # merge with GOOGLE stock
+names(Backtest_Data)[6] <- "GOOGLE" # change column name
+names(Backtest_Data)[8] <- "SP500" # change other column name # get rid of all rows that have "null" 
+Backtest_Data<-read.zoo(Backtest_Data, tz="as.POSIXct")
+
+
+
+# forecast to January     
+fcst=dccforecast(dcc_fit,n.ahead=20)
+For<-as.data.frame(fcst@mforecast)
+GOOGLE_Forecast<-For$mu.1
+SP500_Forecast<-For$mu.2
+
+# convert into data frame
+GOOG<- fortify.zoo(Backtest_Data)
+
+# GOOGLE
+GOOG$GOOGLE<-as.numeric(as.character(GOOG$GOOGLE))
+GOOG$GOOGLE_Forecast<-GOOGLE_Forecast
+GOOG$GOOG_Error <- GOOG$GOOGLE-GOOG$GOOGLE_Forecast
+mean(GOOG$GOOG_Error) # Google mean error =  11.922
+
+# SP500
+GOOG$SP500<-as.numeric(as.character(GOOG$SP500))
+GOOG$SP500_Forecast<-SP500_Forecast
+GOOG$SP500_Error <- GOOG$SP500-GOOG$SP500_Forecast
+mean(GOOG$SP500_Error) # SP500 mean error =  -7.850106
+
+
+GOOG<-read.zoo(GOOG, tz="as.POSIXct")
+
+
+# Graph actual vs. forecast 
+plot.zoo(GOOG$GOOGLE, gg=TRUE, ylab='Price', col=4, type='l')  
+lines(GOOG$GOOGLE_Forecast, col="red") 
+title("VGARCH | GOOGLE Mean Error = 11.922" )
+legend("topleft", inset=c(0,0), y.intersp = 1, 
+       legend = c("GOOGLE Stock", "GOOGLE Forecast"),
+       lty = 1, bty = "n", col = c(1,2), cex = .5)  
+
+
+
+
+
+#################   DCC  ##############################       
+# forecast to January     
+fcst=dccforecast(dcc_fit_2,n.ahead=20)
+For<-as.data.frame(fcst@mforecast)
+# For
+GOOGLE_Forecast<-For$mu.1
+SP500_Forecast<-For$mu.2
+
+# convert into data frame
+GOOG<- fortify.zoo(Backtest_Data)
+
+# GOOGLE
+GOOG$GOOGLE<-as.numeric(as.character(GOOG$GOOGLE))
+GOOG$GOOGLE_Forecast<-GOOGLE_Forecast
+GOOG$GOOG_Error <- GOOG$GOOGLE-GOOG$GOOGLE_Forecast
+mean(GOOG$GOOG_Error) # Google mean error =  11.91674
+
+# SP500
+GOOG$SP500<-as.numeric(as.character(GOOG$SP500))
+GOOG$SP500_Forecast<-SP500_Forecast
+GOOG$SP500_Error <- GOOG$SP500-GOOG$SP500_Forecast
+mean(GOOG$SP500_Error) # SP500 mean error =  -7.854811
+
+
+GOOG<-read.zoo(GOOG, tz="as.POSIXct")
+
+
+# Graph actual vs. forecast 
+plot.zoo(GOOG$GOOGLE, gg=TRUE, ylab='Price', col=4, type='l')  
+lines(GOOG$GOOGLE_Forecast, col="red") 
+title("DCC | GOOGLE Mean Error = 11.91674" )
+legend("topleft", inset=c(0,0), y.intersp = 1, 
+       legend = c("GOOGLE Stock", "GOOGLE Forecast"),
+       lty = 1, bty = "n", col = c(1,2), cex = .5)  
+        
+
+
+# __CONCLUSION__: EGARCH is the best forecast model, because it scored the lowest mean error.
+
+
+#**Step 5: Accuracy test**
+
+################################### Step 5: Accuracy test ##################################
+
+
+# ARIMA
+ARIMA_ME<-mean(PriceArima$x-PriceArima$fitted)
+library(Metrics)
+ARIMA_RMSE<-rmse(PriceArima$x, PriceArima$fitted)
+ARIMA_MAE<-mae(PriceArima$x, PriceArima$fitted)
+ARIMA_MPE<-mean((PriceArima$x-PriceArima$fitted)/PriceArima$x)*(100/length(PriceArima$x-PriceArima$fitted))
+ARIMA_MAPE<-mape(PriceArima$x, PriceArima$fitted)
+ARIMA_MASE<-mase(PriceArima$x, PriceArima$fitted, step_size = 1)
+
+
+
+# ARCH
+
+# convert into time series
+
+GOOG<- fortify.zoo(StockData$Adj.Close)
+GOOG$`StockData$Adj.Close`<-as.numeric(as.character(GOOG$`StockData$Adj.Close`))
+GOOG$Fit<-arch.fit@fit[["fitted.values"]]
+GOOG$Error <- GOOG$`StockData$Adj.Close`-GOOG$Fit
+ARCH_ME<-mean(GOOG$Error) # mean error = 0.813864
+library(Metrics)
+ARCH_RMSE<-rmse(GOOG$`StockData$Adj.Close`, GOOG$Fit)
+ARCH_MAE<-mae(GOOG$`StockData$Adj.Close`, GOOG$Fit)
+ARCH_MPE<-mean((GOOG$`StockData$Adj.Close`- GOOG$Fit)/GOOG$`StockData$Adj.Close`)*(100/length(GOOG$Error))
+ARCH_MAPE<-mape(GOOG$`StockData$Adj.Close`, GOOG$Fit)
+ARCH_MASE<-mase(GOOG$`StockData$Adj.Close`, GOOG$Fit, step_size = 1)
+
+
+# GARCH
+
+# convert into time series
+
+GOOG<- fortify.zoo(StockData$Adj.Close)
+GOOG$`StockData$Adj.Close`<-as.numeric(as.character(GOOG$`StockData$Adj.Close`))
+GOOG$Fit<-gfit.ru@fit[["fitted.values"]]
+GOOG$Error <- GOOG$`StockData$Adj.Close`-GOOG$Fit
+GARCH_ME<-mean(GOOG$Error) # mean error =  -0.4768176
+library(Metrics)
+GARCH_RMSE<-rmse(GOOG$`StockData$Adj.Close`, GOOG$Fit)
+GARCH_MAE<-mae(GOOG$`StockData$Adj.Close`, GOOG$Fit)
+GARCH_MPE<-mean((GOOG$`StockData$Adj.Close`-GOOG$Fit)/GOOG$`StockData$Adj.Close`)*(100/length(GOOG$Error))
+GARCH_MAPE<-mape(GOOG$`StockData$Adj.Close`, GOOG$Fit)
+GARCH_MASE<-mase(GOOG$`StockData$Adj.Close`, GOOG$Fit, step_size = 1)
+
+
+
+
+# EGARCH
+
+# convert into time series
+
+GOOG<- fortify.zoo(StockData$Adj.Close)
+GOOG$`StockData$Adj.Close`<-as.numeric(as.character(GOOG$`StockData$Adj.Close`))
+GOOG$Fit<-egarchsnp.fit@fit[["fitted.values"]]
+GOOG$Error <- GOOG$`StockData$Adj.Close`-GOOG$Fit
+EGARCH_ME<-mean(GOOG$Error) # mean error =  0.80284
+library(Metrics)
+EGARCH_RMSE<-rmse(GOOG$`StockData$Adj.Close`, GOOG$Fit)
+EGARCH_MAE<-mae(GOOG$`StockData$Adj.Close`, GOOG$Fit)
+EGARCH_MPE<-mean((GOOG$`StockData$Adj.Close`-GOOG$Fit)/GOOG$`StockData$Adj.Close`)*(100/length(GOOG$Error))
+EGARCH_MAPE<-mape(GOOG$`StockData$Adj.Close`, GOOG$Fit)
+EGARCH_MASE<-mase(GOOG$`StockData$Adj.Close`, GOOG$Fit, step_size = 1)
+
+
+
+
+# VGARCH
+
+# convert into time series
+
+
+GOOG<- fortify.zoo(PriceAll)
+GOOG$GOOGLE<-as.numeric(as.character(GOOG$GOOGLE))
+GOOG$SP500<-as.numeric(as.character(GOOG$SP500))
+GOOG$Fit<-H1
+GOOG$Error <- GOOG$GOOGLE-GOOG$Fit
+VGARCH_ME<-mean(GOOG$Error) # mean error =  0.3639009
+library(Metrics)
+VGARCH_RMSE<-rmse(GOOG$GOOGLE, GOOG$Fit)
+VGARCH_MAE<-mae(GOOG$GOOGLE, GOOG$Fit)
+VGARCH_MPE<-mean((GOOG$GOOGLE-GOOG$Fit)/GOOG$GOOGLE)*(100/length(GOOG$Error))
+VGARCH_MAPE<-mape(GOOG$GOOGLE, GOOG$Fit)
+VGARCH_MASE<-mase(GOOG$GOOGLE, GOOG$Fit, step_size = 1)
+
+
+
+
+
+# DCC
+
+
+GOOG<- fortify.zoo(PriceAll)
+GOOG$GOOGLE<-as.numeric(as.character(GOOG$GOOGLE))
+GOOG$SP500<-as.numeric(as.character(GOOG$SP500))
+GOOG$Fit<-H2
+GOOG$Error <- GOOG$GOOGLE-GOOG$Fit
+DCC_ME<-mean(GOOG$Error) # mean error =  -71.65798
+library(Metrics)
+DCC_RMSE<-rmse(GOOG$GOOGLE, GOOG$Fit)
+DCC_MAE<-mae(GOOG$GOOGLE, GOOG$Fit)
+DCC_MPE<-mean((GOOG$GOOGLE-GOOG$Fit)/GOOG$GOOGLE)*(100/length(GOOG$Error))
+DCC_MAPE<-mape(GOOG$GOOGLE, GOOG$Fit)
+DCC_MASE<-mase(GOOG$GOOGLE, GOOG$Fit, step_size = 1)
+
+
+
+# Generate dataset with all of this data
+
+ME<-c(ARIMA_ME, ARCH_ME, GARCH_ME, EGARCH_ME, VGARCH_ME, DCC_ME)
+RMSE<-c(ARIMA_RMSE, ARCH_RMSE, GARCH_RMSE, EGARCH_RMSE, VGARCH_RMSE, DCC_RMSE)
+MAE<- c(ARIMA_MAE, ARCH_MAE, GARCH_MAE, EGARCH_MAE, VGARCH_MAE, DCC_MAE)
+MPE<-c(ARIMA_MPE, ARCH_MPE, GARCH_MPE, EGARCH_MPE, VGARCH_MPE, DCC_MPE)
+MAPE<-c(ARIMA_MAPE, ARCH_MAPE, GARCH_MAPE, EGARCH_MAPE, VGARCH_MAPE, DCC_MAPE)
+MASE<-c(ARIMA_MASE, ARCH_MASE, GARCH_MASE, EGARCH_MASE, VGARCH_MASE, DCC_MASE)
+Models<-c("ARIMA", "ARCH", "GARCH", "EGARCH", "VGARCH", "DCC")
+
+Evaluate<-data.frame(Models, ME, RMSE, MAE, MPE, MAPE, MASE)
+Evaluate
+        
+
+       
+Evaluate$Models <- levels(Evaluate$Models)[as.numeric(Evaluate$Models)] # to convert from factor to character variable
+
+# Return the name of the model with the best estimator
+
+DF<-as.table(which(Evaluate==min(abs(Evaluate[,2])), arr.ind=TRUE))
+ME<-Evaluate[DF[1,1],1]
+
+DF<-as.table(which(Evaluate==min(abs(Evaluate[,3])), arr.ind=TRUE))
+RMSE<-Evaluate[DF[1,1],1]
+
+DF<-as.table(which(Evaluate==min(abs(Evaluate[,4])), arr.ind=TRUE))
+MAE<-Evaluate[DF[1,1],1]
+
+DF<-as.table(which(Evaluate==min(Evaluate[,5]), arr.ind=TRUE))
+MPE<-Evaluate[DF[1,1],1]
+
+DF<-as.table(which(Evaluate==min(abs(Evaluate[,6])), arr.ind=TRUE))
+MAPE<-Evaluate[DF[1,1],1]
+
+DF<-as.table(which(Evaluate==min(abs(Evaluate[,7])), arr.ind=TRUE))
+MASE<-Evaluate[DF[1,1],1]
+
+
+# print the models that scored the lowest at each estimator
+
+cbind(ME, RMSE, MAE, MPE, MAPE, MASE)
+         
+
+
+# __CONCLUSION__: ARIMA is the best model 
+
+
+#--------------------------------------------------------------------------------------------------------
+
+# RECAP OF CONCLUSIONS:
+ # **K-Fold Cross** Validation = ARIMA
+ # **In-sample Backtest (1 month forward)** = EGARCH 
+ # **Accuracy estimates** = ARIMA 
+
+
+# MODEL OF CHOICE: *EGARCH* 
+# I chose EGARCH, because it provided the best forecast for January, which was a very volatile month. This model is second bested by GARCH, followed by ARIMA.
+
+
+################################### Step 2: K-fold Cross Validation ##################################
+ # The first is regular k-fold cross-validation for autoregressive models. 
+ # Although cross-validation is sometimes not valid for time series models, 
+  # it does work for autoregressions
+      # Theory on the appropriateness of K-Fold cross validation for time series: 
+          # https://robjhyndman.com/publications/cv-time-series/
+
+library(forecast)
+modelcv_Arima <- CVar(PriceArima$fitted, k=5)                    # ARIMA
+  CV_Arima<-as.data.frame(modelcv_Arima$CVsummary)
+    colnames(CV_Arima)<- c("Arima_Mean", "Arima_SD")
+modelcv_Arch <- CVar(arch.fit@fit[["fitted.values"]], k=5)       # ARCH
+  CV_Arch<-as.data.frame(modelcv_Arch$CVsummary)
+    colnames(CV_Arch)<- c("Arch_Mean", "Arch_SD")
+modelcv_Garch<- CVar(gfit.ru@fit[["fitted.values"]], k=5)        # GARCH 
+  CV_Garch<-as.data.frame(modelcv_Garch$CVsummary)
+    colnames(CV_Garch)<- c("Garch_Mean", "Garch_SD")
+modelcv_EGarch<- CVar(egarchsnp.fit@fit[["fitted.values"]], k=5) # EGARCH
+  CV_EGarch<-as.data.frame(modelcv_EGarch$CVsummary)
+    colnames(CV_EGarch)<- c("Garch_Mean", "Garch_SD")
+    
+# for the multivariate GARCH, I will only choose the GOOGLE stats
+  H<-as.data.frame(dcc_fit@model[["mu"]])
+    H1<-H[,1]
+modelcv_VGarch<- CVar(H1, k=5)                                   # VGARCH
+  CV_VGarch<-as.data.frame(modelcv_VGarch$CVsummary)
+    colnames(CV_VGarch)<- c("VGarch_Mean", "VGarch_SD")
+    
+# for the DCC, I will only choose the GOOGLE stats
+  H<-as.data.frame(dcc_fit_2@model[["mu"]])
+    H2<-H[,1]
+modelcv_DCC<- CVar(H1, k=5)
+  CV_DCC<-as.data.frame(modelcv_DCC$CVsummary)                   # DCC
+    colnames(CV_DCC)<- c("DCC_Mean", "DCC_SD")
+    
+# merge all k - folds
+    # merge multiple datasets
+ K_Folds <- Reduce(function(x, y) merge(x, y, all=TRUE), 
+                   list(CV_Arima, CV_Arch, CV_Garch,
+                        CV_EGarch, CV_VGarch, CV_DCC))
+# data frame of all K-Folds
+K_Folds<-cbind(CV_Arima, CV_Arch, CV_Garch,
+               CV_EGarch, CV_VGarch, CV_DCC)
+# Retrive the best models, by each estimators account
+  A1<-rownames(K_Folds)[1] # retrieves the statistic
+      DF<-as.table(which(K_Folds==min(K_Folds[1,]), arr.ind=TRUE))
+        B1<-colnames(K_Folds)[DF[,2]] 
+   
+        
+  A2<-rownames(K_Folds)[2] # retrieves the statistic
+    DF<-as.table(which(K_Folds==min(K_Folds[2,]), arr.ind=TRUE))
+      B2<-as.matrix(colnames(K_Folds)[DF[,2]])
+        B2<-B2[1,]
+        
+        
+  A3<-rownames(K_Folds)[3] # retrieves the statistic
+    DF<-as.table(which(K_Folds==min(K_Folds[3,]), arr.ind=TRUE))
+      B3<-as.matrix(colnames(K_Folds)[DF[,2]])
+        B3<-B3[1,]
+        
+        
+        
+  A4<-rownames(K_Folds)[4] # retrieves the statistic
+    DF<-as.table(which(K_Folds==min(K_Folds[4,]), arr.ind=TRUE))
+      B4<-colnames(K_Folds)[DF[,2]] 
+      
+      
+  A5<-rownames(K_Folds)[5] # retrieves the statistic
+    DF<-as.table(which(K_Folds==min(K_Folds[5,]), arr.ind=TRUE))
+      B5<-colnames(K_Folds)[DF[,2]] 
+      
+      
+  A6<-rownames(K_Folds)[6] # retrieves the statistic
+    DF<-as.table(which(K_Folds==min(K_Folds[6,1:10]), arr.ind=TRUE))
+      B6<-colnames(K_Folds)[DF[,2]] 
+      
+      
+  A7<-rownames(K_Folds)[7] # retrieves the statistic
+    DF<-as.table(which(K_Folds==min(K_Folds[7,1:10]), arr.ind=TRUE))
+      B7<-colnames(K_Folds)[DF[,2]] 
+   
+      
+# Generate data frame with results
+      Estimator<-c(A1,A2,A3,A4,A5,A6,A7)
+        Model<- c(B1,B2,B3,B4,B5,B6,B7)
+          CV_Results<-cbind(Estimator,Model)
+# Verify the model that repeats itself the most over the best estimators          
+      mytab<-as.table(CV_Results)
+        Freq_Table<-ftable(mytab[,2])
+            Freq_Table<-as.data.frame(Freq_Table)
+              Freq_Table
+        # Return the name of the model with the highest frequency      
+              DF<-as.table(which(Freq_Table==max(Freq_Table[,2]), arr.ind=TRUE))
+                 Freq_Table[DF[1,1],1]
+                    
+                  # Conclusion of Best Models: DCC_SD for the standard Deviation
+                  #                             VGarch for the mean
+      
+    
+################################### Step 3: Graph and Average Error ##################################
+                 par(mfrow=c(2,4))
+                 
+                 # ARIMA
+                 
+                 # convert into time series
+                 
+                 GOOG<- fortify.zoo(StockData$Adj.Close)
+                 GOOG$`StockData$Adj.Close`<-as.numeric(as.character(GOOG$`StockData$Adj.Close`))
+                 GOOG$Fit<-PriceArima$fitted
+                 GOOG$Error <- GOOG$`StockData$Adj.Close`-GOOG$Fit
+                 GOOG<-read.zoo(GOOG, tz="as.POSIXct")
+                 mean(GOOG$Error) # mean error =  0.02955047
+                 
+                 
+                 plot.zoo(GOOG$`StockData$Adj.Close`, gg=TRUE, ylab='Price', col=4, type='l')  
+                 lines(GOOG$Fit, col="red") 
+                 title("ARIMA Model | Mean Error = 0.0296" )
+                 legend("topleft", inset=c(0,0), y.intersp = 1, 
+                        legend = c("Google Stock", "Fitted"),  lty = 1, bty = "n", col = c(1,2), cex = .5)
+                 
+                 
+                 
+                 
+                 
+                  # ARCH
+                 
+                 # convert into time series
+                 
+                 GOOG<- fortify.zoo(StockData$Adj.Close)
+                 GOOG$`StockData$Adj.Close`<-as.numeric(as.character(GOOG$`StockData$Adj.Close`))
+                 GOOG$Fit<-arch.fit@fit[["fitted.values"]]
+                 GOOG$Error <- GOOG$`StockData$Adj.Close`-GOOG$Fit
+                 GOOG<-read.zoo(GOOG, tz="as.POSIXct")
+                 mean(GOOG$Error) # mean error = 0.813864
+                 
+                 
+                 plot.zoo(GOOG$`StockData$Adj.Close`, gg=TRUE, ylab='Price', col=4, type='l')  
+                  lines(GOOG$Fit, col="red") 
+                    title("ARCH Model | Mean Error = 0.8139" )
+                      legend("topleft", inset=c(0,0), y.intersp = 1, 
+                        legend = c("Google Stock", "Fitted"),  lty = 1, bty = "n", col = c(1,2), cex = .5)
+                
+                      
+                      
+                      
+                      # GARCH
+                      
+                      # convert into time series
+                      
+                      GOOG<- fortify.zoo(StockData$Adj.Close)
+                      GOOG$`StockData$Adj.Close`<-as.numeric(as.character(GOOG$`StockData$Adj.Close`))
+                      GOOG$Fit<-gfit.ru@fit[["fitted.values"]]
+                      GOOG$Error <- GOOG$`StockData$Adj.Close`-GOOG$Fit
+                      GOOG<-read.zoo(GOOG, tz="as.POSIXct")
+                      mean(GOOG$Error) # mean error = -0.4768176
+                      
+                      
+                      plot.zoo(GOOG$`StockData$Adj.Close`, gg=TRUE, ylab='Price', col=4, type='l')  
+                      lines(GOOG$Fit, col="red") 
+                      title("GARCH Model | Mean Error = -0.4768" )
+                      legend("topleft", inset=c(0,0), y.intersp = 1, 
+                             legend = c("Google Stock", "Fitted"),  lty = 1, bty = "n", col = c(1,2), cex = .5)
+                      
+                      
+                      
+                      
+                      # EGARCH
+                      
+                      # convert into time series
+                      
+                      GOOG<- fortify.zoo(StockData$Adj.Close)
+                      GOOG$`StockData$Adj.Close`<-as.numeric(as.character(GOOG$`StockData$Adj.Close`))
+                      GOOG$Fit<-egarchsnp.fit@fit[["fitted.values"]]
+                      GOOG$Error <- GOOG$`StockData$Adj.Close`-GOOG$Fit
+                      GOOG<-read.zoo(GOOG, tz="as.POSIXct")
+                      mean(GOOG$Error) # mean error = 0.80284
+                      
+                      
+                      plot.zoo(GOOG$`StockData$Adj.Close`, gg=TRUE, ylab='Price', col=4, type='l')  
+                      lines(GOOG$Fit, col="red") 
+                      title("EGARCH Model | Mean Error = 0.8028" )
+                      legend("topleft", inset=c(0,0), y.intersp = 1, 
+                             legend = c("Google Stock", "Fitted"),  lty = 1, bty = "n", col = c(1,2), cex = .5)
+                      
+                      
+                      
+                      
+                      # VGARCH
+                      
+                      # convert into time series
+                      
+                      GOOG<- fortify.zoo(PriceAll)
+                      GOOG$GOOGLE<-as.numeric(as.character(GOOG$GOOGLE))
+                      GOOG$SP500<-as.numeric(as.character(GOOG$SP500))
+                      GOOG$Fit<-H1
+                      GOOG$Error <- GOOG$GOOGLE-GOOG$Fit
+                      mean(GOOG$Error) # mean error = 0.3639009
+                      GOOG<-read.zoo(GOOG, tz="as.POSIXct")
+                      
+                      plot.zoo(GOOG$GOOGLE, gg=TRUE, ylab='Price', col=4, type='l')  
+                      lines(GOOG$Fit, col="red") 
+                      title("VGARCH Model | Mean Error = 0.3639" )
+                      legend("topleft", inset=c(0,0), y.intersp = 1, 
+                             legend = c("Google Stock", "Fitted"),  lty = 1, bty = "n", col = c(1,2), cex = .5)
+                      
+                      
+                      
+                      
+                      
+                      # DCC
+                      
+                      # convert into time series
+                      
+                      GOOG<- fortify.zoo(PriceAll)
+                      GOOG$GOOGLE<-as.numeric(as.character(GOOG$GOOGLE))
+                      GOOG$SP500<-as.numeric(as.character(GOOG$SP500))
+                      GOOG$Fit<-H2
+                      GOOG$Error <- GOOG$GOOGLE-GOOG$Fit
+                      mean(GOOG$Error) # mean error = -71.65798
+                      GOOG<-read.zoo(GOOG, tz="as.POSIXct")
+                      
+                      plot.zoo(GOOG$GOOGLE, gg=TRUE, ylab='Price', col=4, type='l')  
+                      lines(GOOG$Fit, col="red") 
+                      title("DCC Model | Mean Error = -71.658" )
+                      legend("topleft", inset=c(0,0), y.intersp = 1, 
+                             legend = c("Google Stock", "Fitted"),  lty = 1, bty = "n", col = c(1,2), cex = .5)
+                      
+                 
+                 
+                           ###################### CONCLUSION: BEST Mean forecast: ARIMA 
+                                                       
+                 
+################################### Step 4: in-sample Backtest (1 month forward) ##################################
+   par(mfrow=c(1,1))
+    par(mfrow=c(2,4))                  
+     # import data, updated from January
+     library(zoo)
+       Backtest_GOOG <- read.zoo("Backtest_GOOG.csv",header = TRUE, sep = ",",format="%Y-%m-%d")
+   
+       
+       
+       
+  #################   ARIMA  ##############################       
+    # forecast to January     
+      library(forecast)                
+          FutureForecast<-forecast(PriceArima,h=20) # 1 month forecast
+          FutureForecast_F<-as.data.frame(FutureForecast)
+          FutureForecast_F$`Point Forecast`
+          # convert into time series
+          GOOG<- fortify.zoo(Backtest_GOOG$Adj.Close)
+          GOOG$`Backtest_GOOG$Adj.Close`<-as.numeric(as.character(GOOG$`Backtest_GOOG$Adj.Close`))
+            GOOG$Forecast<-FutureForecast_F$`Point Forecast`
+              GOOG$Error <- GOOG$`Backtest_GOOG$Adj.Close`-GOOG$Forecast
+              mean(GOOG$Error) # mean error =  25.93711
+                GOOG<-read.zoo(GOOG, tz="as.POSIXct")
+          
+                  
+    # Graph actual vs. forecast 
+          plot.zoo(GOOG$`Backtest_GOOG$Adj.Close`, gg=TRUE, ylab='Price', col=4, type='l')  
+          lines(GOOG$Forecast, col="red") 
+          title("ARIMA Model | Mean Error = 25.93711" )
+          legend("topleft", inset=c(0,0), y.intersp = 1, 
+                 legend = c("Google Stock", "Forecast"),  lty = 1, bty = "n", col = c(1,2), cex = .5)
+          
+    
+          
+          
+      #################   ARCH  ##############################       
+          # forecast to January     
+          FutureForecast=ugarchforecast(arch.fit, n.ahead = 20)
+          Future_For<-as.data.frame(FutureForecast@forecast)
+          FutureForecast_F<-Future_For$X2020.12.29.1
+          
+          # convert into time series
+          GOOG<- fortify.zoo(Backtest_GOOG$Adj.Close)
+          GOOG$`Backtest_GOOG$Adj.Close`<-as.numeric(as.character(GOOG$`Backtest_GOOG$Adj.Close`))
+          GOOG$Forecast<-FutureForecast_F
+          GOOG$Error <- GOOG$`Backtest_GOOG$Adj.Close`-GOOG$Forecast
+          mean(GOOG$Error) # mean error =  42.02741
+          GOOG<-read.zoo(GOOG, tz="as.POSIXct")
+          
+          
+          # Graph actual vs. forecast 
+          plot.zoo(GOOG$`Backtest_GOOG$Adj.Close`, gg=TRUE, ylab='Price', col=4, type='l')  
+          lines(GOOG$Forecast, col="red") 
+          title("ARCH Model | Mean Error = 42.02741" )
+          legend("topleft", inset=c(0,0), y.intersp = 1, 
+                 legend = c("Google Stock", "Forecast"),  lty = 1, bty = "n", col = c(1,2), cex = .5)
+          
+          
+          
+          
+          #################   GARCH  ##############################       
+          # forecast to January     
+          FutureForecast=ugarchforecast(gfit.ru, n.ahead = 20)
+          Future_For<-as.data.frame(FutureForecast@forecast)
+          FutureForecast_F<-Future_For$X2020.12.29.1
+          
+          
+          # convert into time series
+          GOOG<- fortify.zoo(Backtest_GOOG$Adj.Close)
+          GOOG$`Backtest_GOOG$Adj.Close`<-as.numeric(as.character(GOOG$`Backtest_GOOG$Adj.Close`))
+          GOOG$Forecast<-FutureForecast_F
+          GOOG$Error <- GOOG$`Backtest_GOOG$Adj.Close`-GOOG$Forecast
+          mean(GOOG$Error) # mean error =  6.506502
+          GOOG<-read.zoo(GOOG, tz="as.POSIXct")
+          
+          
+          # Graph actual vs. forecast 
+          plot.zoo(GOOG$`Backtest_GOOG$Adj.Close`, gg=TRUE, ylab='Price', col=4, type='l')  
+          lines(GOOG$Forecast, col="red") 
+          title("GARCH Model | Mean Error = 6.506502" )
+          legend("topleft", inset=c(0,0), y.intersp = 1, 
+                 legend = c("Google Stock", "Forecast"),  lty = 1, bty = "n", col = c(1,2), cex = .5)   
+          
+          
+          
+          
+          #################   EGARCH  ##############################       
+          # forecast to January     
+          FutureForecast=ugarchforecast(egarchsnp.fit, n.ahead = 20)
+          Future_For<-as.data.frame(FutureForecast@forecast)
+          FutureForecast_F<-Future_For$X2020.12.29.1
+          
+          
+          # convert into time series
+          GOOG<- fortify.zoo(Backtest_GOOG$Adj.Close)
+          GOOG$`Backtest_GOOG$Adj.Close`<-as.numeric(as.character(GOOG$`Backtest_GOOG$Adj.Close`))
+          GOOG$Forecast<-FutureForecast_F
+          GOOG$Error <- GOOG$`Backtest_GOOG$Adj.Close`-GOOG$Forecast
+          mean(GOOG$Error) # mean error =   42.26921
+          GOOG<-read.zoo(GOOG, tz="as.POSIXct")
+          
+          
+          # Graph actual vs. forecast 
+          plot.zoo(GOOG$`Backtest_GOOG$Adj.Close`, gg=TRUE, ylab='Price', col=4, type='l')  
+          lines(GOOG$Forecast, col="red") 
+          title("EGARCH Model | Mean Error = 42.26921" )
+          legend("topleft", inset=c(0,0), y.intersp = 1, 
+                 legend = c("Google Stock", "Forecast"),  lty = 1, bty = "n", col = c(1,2), cex = .5)  
+          
+          
+          
+          
+          #################   VGARCH  ############################## 
+          # merge the GOOGLE stock and S&P500 index into one dataset
+          
+          
+          
+          SP <- read.zoo("Backtest_SP500.csv",header = TRUE, sep = ",",format="%Y-%m-%d") # import S&P 500 index
+          Backtest_Data<-merge(fortify.zoo(Backtest_GOOG), fortify.zoo(SP$Adj.Close), all = FALSE) # merge with GOOGLE stock
+          names(Backtest_Data)[6] <- "GOOGLE" # change column name
+          names(Backtest_Data)[8] <- "SP500" # change other column name # get rid of all rows that have "null" 
+          Backtest_Data<-read.zoo(Backtest_Data, tz="as.POSIXct")
+       
+          
+          
+          # forecast to January     
+          fcst=dccforecast(dcc_fit,n.ahead=20)
+          For<-as.data.frame(fcst@mforecast)
+          GOOGLE_Forecast<-For$mu.1
+          SP500_Forecast<-For$mu.2
+          
+          # convert into data frame
+          GOOG<- fortify.zoo(Backtest_Data)
+          
+          # GOOGLE
+          GOOG$GOOGLE<-as.numeric(as.character(GOOG$GOOGLE))
+          GOOG$GOOGLE_Forecast<-GOOGLE_Forecast
+          GOOG$GOOG_Error <- GOOG$GOOGLE-GOOG$GOOGLE_Forecast
+          mean(GOOG$GOOG_Error) # Google mean error =  17.83409
+          
+          # SP500
+          GOOG$SP500<-as.numeric(as.character(GOOG$SP500))
+          GOOG$SP500_Forecast<-SP500_Forecast
+          GOOG$SP500_Error <- GOOG$SP500-GOOG$SP500_Forecast
+          mean(GOOG$SP500_Error) # SP500 mean error =  28.91807
+          
+          
+          GOOG<-read.zoo(GOOG, tz="as.POSIXct")
+          
+          
+          # Graph actual vs. forecast 
+          plot.zoo(GOOG$GOOGLE, gg=TRUE, ylab='Price', col=4, type='l')  
+          lines(GOOG$GOOGLE_Forecast, col="red") 
+          title("VGARCH | GOOGLE Mean Error = 17.83409" )
+          legend("topleft", inset=c(0,0), y.intersp = 1, 
+                 legend = c("GOOGLE Stock", "GOOGLE Forecast"),
+                 lty = 1, bty = "n", col = c(1,2), cex = .5)  
+          
+          
+          
+          
+          
+          #################   DCC  ##############################       
+          # forecast to January     
+          fcst=dccforecast(dcc_fit_2,n.ahead=20)
+          For<-as.data.frame(fcst@mforecast)
+          For
+          GOOGLE_Forecast<-For$mu.1
+          SP500_Forecast<-For$mu.2
+          
+          # convert into data frame
+          GOOG<- fortify.zoo(Backtest_Data)
+          
+          # GOOGLE
+          GOOG$GOOGLE<-as.numeric(as.character(GOOG$GOOGLE))
+          GOOG$GOOGLE_Forecast<-GOOGLE_Forecast
+          GOOG$GOOG_Error <- GOOG$GOOGLE-GOOG$GOOGLE_Forecast
+          mean(GOOG$GOOG_Error) # Google mean error =  723.7222
+          
+          # SP500
+          GOOG$SP500<-as.numeric(as.character(GOOG$SP500))
+          GOOG$SP500_Forecast<-SP500_Forecast
+          GOOG$SP500_Error <- GOOG$SP500-GOOG$SP500_Forecast
+          mean(GOOG$SP500_Error) # SP500 mean error =  1075.656
+          
+          
+          GOOG<-read.zoo(GOOG, tz="as.POSIXct")
+          
+          
+          # Graph actual vs. forecast 
+          plot.zoo(GOOG$GOOGLE, gg=TRUE, ylab='Price', col=4, type='l')  
+          lines(GOOG$GOOGLE_Forecast, col="red") 
+          title("DCC | GOOGLE Mean Error = 723.7222" )
+          legend("topleft", inset=c(0,0), y.intersp = 1, 
+                 legend = c("GOOGLE Stock", "GOOGLE Forecast"),
+                 lty = 1, bty = "n", col = c(1,2), cex = .5)  
+          
+ 
+          # CONCLUSION: GARCH is the best forecast
+            # because it scored the lowest mean error
+                   
+################################### Step 5: Accuracy test ##################################
+          
+          
+          # ARIMA
+          ARIMA_ME<-mean(PriceArima$x-PriceArima$fitted)
+          library(Metrics)
+          ARIMA_RMSE<-rmse(PriceArima$x, PriceArima$fitted)
+          ARIMA_MAE<-mae(PriceArima$x, PriceArima$fitted)
+          ARIMA_MPE<-mean((PriceArima$x-PriceArima$fitted)/PriceArima$x)*(100/length(PriceArima$x-PriceArima$fitted))
+          ARIMA_MAPE<-mape(PriceArima$x, PriceArima$fitted)
+          ARIMA_MASE<-mase(PriceArima$x, PriceArima$fitted, step_size = 1)
+          
+          
+          
+          # ARCH
+          
+          # convert into time series
+          
+          GOOG<- fortify.zoo(StockData$Adj.Close)
+          GOOG$`StockData$Adj.Close`<-as.numeric(as.character(GOOG$`StockData$Adj.Close`))
+          GOOG$Fit<-arch.fit@fit[["fitted.values"]]
+          GOOG$Error <- GOOG$`StockData$Adj.Close`-GOOG$Fit
+          ARCH_ME<-mean(GOOG$Error) # mean error = 0.813864
+          library(Metrics)
+          ARCH_RMSE<-rmse(GOOG$`StockData$Adj.Close`, GOOG$Fit)
+          ARCH_MAE<-mae(GOOG$`StockData$Adj.Close`, GOOG$Fit)
+          ARCH_MPE<-mean((GOOG$`StockData$Adj.Close`- GOOG$Fit)/GOOG$`StockData$Adj.Close`)*(100/length(GOOG$Error))
+          ARCH_MAPE<-mape(GOOG$`StockData$Adj.Close`, GOOG$Fit)
+          ARCH_MASE<-mase(GOOG$`StockData$Adj.Close`, GOOG$Fit, step_size = 1)
+          
+          
+          # GARCH
+          
+          # convert into time series
+          
+          GOOG<- fortify.zoo(StockData$Adj.Close)
+          GOOG$`StockData$Adj.Close`<-as.numeric(as.character(GOOG$`StockData$Adj.Close`))
+          GOOG$Fit<-gfit.ru@fit[["fitted.values"]]
+          GOOG$Error <- GOOG$`StockData$Adj.Close`-GOOG$Fit
+          GARCH_ME<-mean(GOOG$Error) # mean error =  -0.4768176
+          library(Metrics)
+          GARCH_RMSE<-rmse(GOOG$`StockData$Adj.Close`, GOOG$Fit)
+          GARCH_MAE<-mae(GOOG$`StockData$Adj.Close`, GOOG$Fit)
+          GARCH_MPE<-mean((GOOG$`StockData$Adj.Close`-GOOG$Fit)/GOOG$`StockData$Adj.Close`)*(100/length(GOOG$Error))
+          GARCH_MAPE<-mape(GOOG$`StockData$Adj.Close`, GOOG$Fit)
+          GARCH_MASE<-mase(GOOG$`StockData$Adj.Close`, GOOG$Fit, step_size = 1)
+        
+          
+          
+          
+          # EGARCH
+          
+          # convert into time series
+          
+          GOOG<- fortify.zoo(StockData$Adj.Close)
+          GOOG$`StockData$Adj.Close`<-as.numeric(as.character(GOOG$`StockData$Adj.Close`))
+          GOOG$Fit<-egarchsnp.fit@fit[["fitted.values"]]
+          GOOG$Error <- GOOG$`StockData$Adj.Close`-GOOG$Fit
+          EGARCH_ME<-mean(GOOG$Error) # mean error =  0.80284
+          library(Metrics)
+          EGARCH_RMSE<-rmse(GOOG$`StockData$Adj.Close`, GOOG$Fit)
+          EGARCH_MAE<-mae(GOOG$`StockData$Adj.Close`, GOOG$Fit)
+          EGARCH_MPE<-mean((GOOG$`StockData$Adj.Close`-GOOG$Fit)/GOOG$`StockData$Adj.Close`)*(100/length(GOOG$Error))
+          EGARCH_MAPE<-mape(GOOG$`StockData$Adj.Close`, GOOG$Fit)
+          EGARCH_MASE<-mase(GOOG$`StockData$Adj.Close`, GOOG$Fit, step_size = 1)
+      
+          
+          
+          
+          # VGARCH
+          
+          # convert into time series
+          
+          
+          GOOG<- fortify.zoo(PriceAll)
+          GOOG$GOOGLE<-as.numeric(as.character(GOOG$GOOGLE))
+          GOOG$SP500<-as.numeric(as.character(GOOG$SP500))
+          GOOG$Fit<-H1
+          GOOG$Error <- GOOG$GOOGLE-GOOG$Fit
+          VGARCH_ME<-mean(GOOG$Error) # mean error =  0.3639009
+          library(Metrics)
+          VGARCH_RMSE<-rmse(GOOG$GOOGLE, GOOG$Fit)
+          VGARCH_MAE<-mae(GOOG$GOOGLE, GOOG$Fit)
+          VGARCH_MPE<-mean((GOOG$GOOGLE-GOOG$Fit)/GOOG$GOOGLE)*(100/length(GOOG$Error))
+          VGARCH_MAPE<-mape(GOOG$GOOGLE, GOOG$Fit)
+          VGARCH_MASE<-mase(GOOG$GOOGLE, GOOG$Fit, step_size = 1)
+          
+          
+         
+          
+          
+          # DCC
+          
+          
+          GOOG<- fortify.zoo(PriceAll)
+          GOOG$GOOGLE<-as.numeric(as.character(GOOG$GOOGLE))
+          GOOG$SP500<-as.numeric(as.character(GOOG$SP500))
+          GOOG$Fit<-H2
+          GOOG$Error <- GOOG$GOOGLE-GOOG$Fit
+          DCC_ME<-mean(GOOG$Error) # mean error =  -71.65798
+          library(Metrics)
+          DCC_RMSE<-rmse(GOOG$GOOGLE, GOOG$Fit)
+          DCC_MAE<-mae(GOOG$GOOGLE, GOOG$Fit)
+          DCC_MPE<-mean((GOOG$GOOGLE-GOOG$Fit)/GOOG$GOOGLE)*(100/length(GOOG$Error))
+          DCC_MAPE<-mape(GOOG$GOOGLE, GOOG$Fit)
+          DCC_MASE<-mase(GOOG$GOOGLE, GOOG$Fit, step_size = 1)
+          
+          
+          
+          # Generate dataset with all of this data
+          
+          ME<-c(ARIMA_ME, ARCH_ME, GARCH_ME, EGARCH_ME, VGARCH_ME, DCC_ME)
+          RMSE<-c(ARIMA_RMSE, ARCH_RMSE, GARCH_RMSE, EGARCH_RMSE, VGARCH_RMSE, DCC_RMSE)
+          MAE<- c(ARIMA_MAE, ARCH_MAE, GARCH_MAE, EGARCH_MAE, VGARCH_MAE, DCC_MAE)
+          MPE<-c(ARIMA_MPE, ARCH_MPE, GARCH_MPE, EGARCH_MPE, VGARCH_MPE, DCC_MPE)
+          MAPE<-c(ARIMA_MAPE, ARCH_MAPE, GARCH_MAPE, EGARCH_MAPE, VGARCH_MAPE, DCC_MAPE)
+          MASE<-c(ARIMA_MASE, ARCH_MASE, GARCH_MASE, EGARCH_MASE, VGARCH_MASE, DCC_MASE)
+          Models<-c("ARIMA", "ARCH", "GARCH", "EGARCH", "VGARCH", "DCC")
+          
+          Evaluate<-data.frame(Models, ME, RMSE, MAE, MPE, MAPE, MASE)
+          Evaluate
+          
+          Evaluate$Models <- levels(Evaluate$Models)[as.numeric(Evaluate$Models)] # to convert from factor to character variable
+          
+          # Return the name of the model with the best estimator
+          
+          DF<-as.table(which(Evaluate==min(abs(Evaluate[,2])), arr.ind=TRUE))
+          ME<-Evaluate[DF[1,1],1]
+          
+          DF<-as.table(which(Evaluate==min(abs(Evaluate[,3])), arr.ind=TRUE))
+          RMSE<-Evaluate[DF[1,1],1]
+          
+          DF<-as.table(which(Evaluate==min(abs(Evaluate[,4])), arr.ind=TRUE))
+          MAE<-Evaluate[DF[1,1],1]
+          
+          DF<-as.table(which(Evaluate==min(Evaluate[,5]), arr.ind=TRUE))
+          MPE<-Evaluate[DF[1,1],1]
+          
+          DF<-as.table(which(Evaluate==min(abs(Evaluate[,6])), arr.ind=TRUE))
+          MAPE<-Evaluate[DF[1,1],1]
+          
+          DF<-as.table(which(Evaluate==min(abs(Evaluate[,7])), arr.ind=TRUE))
+          MASE<-Evaluate[DF[1,1],1]
+          
+           
+          # print the models that scored the lowest at each estimator
+          
+          cbind(ME, RMSE, MAE, MPE, MAPE, MASE)
+          # Conclusion of Best Models: ARIMA scored the lowest, followed by DCC.
+          # Given that I suspect that ARIMA overfits our model,
+          # I have selected the DCC model, which is the second best model.)
+          
+          
+###############################################################################################################################
+                      ############################# MODEL OF CHOICE: GARCH  ###########################
+                      
+                             # REASONS:
+                                # K-Fold Cross Validation = VGARCH scored best at mean value forecast,
+                                                # DCC scored best at standard deviation forecast
+                                # in-sample Backtest (1 month forward) = GARCH scored best, followed by VGARCH
+                                # Accuracy estimates = ARIMA scored best, followed by DCC
+                      
